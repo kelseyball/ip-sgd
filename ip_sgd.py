@@ -26,6 +26,8 @@ def main(args):
     label = 'baseline'
     if args.ip:
         label = 'inner-product-sgd'
+    if args.label:
+        label = args.label
     writer = SummaryWriter(f'runs/{label}')
 
     # dataset parameters
@@ -50,9 +52,21 @@ def main(args):
     step_size = 0.001
 
     # training loop
-    for epoch in range(args.epochs):
+    for epoch in range(args.num_epochs):
         if args.ip:
-            train.sort(key=lambda example: dot(example[0], bhat))
+            positives = [e for e in train if e[1].item() == 1.0]
+            negatives = [e for e in train if e[1].item() == 0.0]
+            random.shuffle(positives)
+            negatives.sort(
+                key=lambda example: dot(example[0], bhat),
+                reverse=True,
+            )
+            # interleave positives with negatives sorted by < x, b_hat >
+            train = [
+                example
+                for pair in zip(positives, negatives)
+                for example in pair
+            ]
         else:
             random.shuffle(train)
         print(f"----- epoch {epoch} -----")
@@ -102,6 +116,10 @@ if __name__ == '__main__':
         '--seed', '-s',
         type=int,
         default=42
+    )
+    parser.add_argument(
+        '--label', '-l',
+        help='tensorboard run label',
     )
     args = parser.parse_args()
     main(args)
