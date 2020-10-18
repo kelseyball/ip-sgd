@@ -1,4 +1,5 @@
 import torch
+from math import exp
 from torch.utils.tensorboard import SummaryWriter
 
 import numpy as np
@@ -15,7 +16,7 @@ num_epochs = 10
 writer = SummaryWriter('runs/baseline')
 
 # TODO: generate random covariance matrix
-A = torch.randn(input_dim, input_dim)
+A = torch.rand(input_dim, input_dim)
 covariance_matrix = torch.matmul(A.t(), A)
 m = MultivariateNormal(torch.zeros(input_dim), covariance_matrix)
 b = torch.randn(input_dim)
@@ -25,14 +26,23 @@ data = [(x, Bernoulli(sigmoid(dot(b, x))).sample()) for x in inputs]
 
 bhat = torch.rand(input_dim)
 
+yhat_counter = 0
 for epoch in range(num_epochs):
     random.shuffle(data)
     print(f"----- epoch {epoch} -----")
     for i, (x, y) in enumerate(data):
         yhat = sigmoid(dot(bhat, x))
-        # print("y, yhat: ", y, yhat)
-        loss = -1 * (y * log(yhat)) + (1 - y) * log(1 - yhat)
-        writer.add_scalar('train_loss', loss, epoch * len(data) + i)
+
+        # avoid NaN/inf
+        if yhat == 0 and y == 0:
+            loss = 0
+            yhat_counter += 1
+        elif yhat == 1 and y == 1:
+            loss = 0
+            yhat_counter += 1
+        else:
+            loss = -1 * (y * log(yhat) + (1 - y) * log(1 - yhat))
+            writer.add_scalar('train_loss', loss, epoch * len(data) + i)
 
         # compute/update the gradient for each b_i
         gradient = x * (yhat - y)
