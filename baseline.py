@@ -1,43 +1,42 @@
-import math
 import torch
+from torch.utils.tensorboard import SummaryWriter
+
 import numpy as np
 from torch.distributions.multivariate_normal import MultivariateNormal
 from torch.distributions.bernoulli import Bernoulli
 from torch import sigmoid, dot, log
+import random
 
 input_dim = 50
 num_examples = 1000
-step_size = 0.01
+step_size = 0.001
 num_epochs = 10
 
-m = MultivariateNormal(torch.zeros(input_dim), torch.eye(input_dim))
+writer = SummaryWriter('runs/baseline')
+
+# TODO: generate random covariance matrix
+A = torch.randn(input_dim, input_dim)
+covariance_matrix = torch.matmul(A.t(), A)
+m = MultivariateNormal(torch.zeros(input_dim), covariance_matrix)
 b = torch.randn(input_dim)
-print("b.shape: ", b.shape)
-print("b: ", b)
 
 inputs = [m.sample() for _ in range(num_examples)]
-print("x.shape: ", inputs[0].shape)
-
 data = [(x, Bernoulli(sigmoid(dot(b, x))).sample()) for x in inputs]
-print("y[:5]: ")
-print([(d[1], d[1].type()) for d in data[:5]])
 
 bhat = torch.rand(input_dim)
-for _ in range(num_epochs):
-	for (x, y) in data:
-	  yhat = sigmoid(dot(bhat, x))
-	  # print("y, yhat: ", y, yhat)
-	  loss = -1 * (y * log(yhat)) + (1 - y) * log(1 - yhat)
-	  # print("loss: ", loss)
 
-	  # compute/update the gradient for each w_i
-	  # for i in range(input_dim):
-	  #   dbhat_i = x[i] * (yhat - y)
-	  #   bhat[i] = bhat[i] - step_size * dbhat_i
-	  dbhat = x * (yhat - y)
-	  bhat -= step_size * dbhat
+for epoch in range(num_epochs):
+    random.shuffle(data)
+    print(f"----- epoch {epoch} -----")
+    for i, (x, y) in enumerate(data):
+        yhat = sigmoid(dot(bhat, x))
+        # print("y, yhat: ", y, yhat)
+        loss = -1 * (y * log(yhat)) + (1 - y) * log(1 - yhat)
+        writer.add_scalar('train_loss', loss, epoch * len(data) + i)
 
-	  b_errors = [bhat[i] - b[i] for i in range(input_dim)]
-	  b_error = np.linalg.norm(b_errors, 2)
-	  # print("b_error: ", b_error)
+        # compute/update the gradient for each b_i
+        gradient = x * (yhat - y)
+        bhat -= step_size * gradient
 
+        b_error = np.linalg.norm(bhat - b, 2)
+        writer.add_scalar('b_error', b_error, epoch * len(data) + i)
