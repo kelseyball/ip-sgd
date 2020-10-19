@@ -11,11 +11,29 @@ import random
 
 def compute_loss(yhat, y):
     """
-    compute logistic loss function
+    compute logistic loss
     """
     if (yhat == 0 and y == 0) or (yhat == 1 and y == 1):
         return 0
     return -1 * (y * log(yhat) + (1 - y) * log(1 - yhat))
+
+
+def sort_negatives(train, bhat):
+    """
+    interleave shuffled positives with negatives sorted by <x_i, b_hat>
+    """
+    positives = [e for e in train if e[1].item() == 1.0]
+    negatives = [e for e in train if e[1].item() == 0.0]
+    random.shuffle(positives)
+    negatives.sort(
+        key=lambda example: dot(example[0], bhat),
+        reverse=True,
+    )
+    return [
+        example
+        for pair in zip(positives, negatives)
+        for example in pair
+    ]
 
 
 def main(args):
@@ -54,19 +72,10 @@ def main(args):
     # training loop
     for epoch in range(args.num_epochs):
         if args.ip:
-            positives = [e for e in train if e[1].item() == 1.0]
-            negatives = [e for e in train if e[1].item() == 0.0]
-            random.shuffle(positives)
-            negatives.sort(
-                key=lambda example: dot(example[0], bhat),
-                reverse=True,
-            )
-            # interleave positives with negatives sorted by < x, b_hat >
-            train = [
-                example
-                for pair in zip(positives, negatives)
-                for example in pair
-            ]
+            if args.negatives_only:
+                train = sort_negatives(train, bhat)
+            else:
+                train.sort(key=lambda e: dot(e[0], bhat))
         else:
             random.shuffle(train)
         print(f"----- epoch {epoch} -----")
@@ -100,7 +109,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--ip',
         action='store_true',
-        help='if set, bias SGD by inner product <x_i, b>',
+        help='if set, sort examples by inner product <x_i, b>',
+    )
+    parser.add_argument(
+        '--negatives-only',
+        action='store_true',
+        help='if set, only sort negatives by <x_i, bhat>',
     )
     parser.add_argument(
         '--num-epochs', '-e',
