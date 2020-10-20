@@ -1,4 +1,5 @@
 from argparse import ArgumentParser
+from tqdm import trange
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -46,14 +47,14 @@ def main(args):
         label = 'inner-product-sgd'
     if args.label:
         label = args.label
-    writer = SummaryWriter(f'runs/{label}')
+    writer = SummaryWriter(f'{args.folder}/{label}')
 
     # dataset parameters
     input_dim = 50
     A = torch.rand(input_dim, input_dim)
     covariance_matrix = torch.matmul(A.t(), A)
     m = MultivariateNormal(torch.zeros(input_dim), covariance_matrix)
-    b = torch.randn(input_dim)
+    b = torch.rand(input_dim)
 
     # create dataset
     inputs = [m.sample() for _ in range(args.num_examples)]
@@ -71,15 +72,19 @@ def main(args):
 
     # training loop
     for epoch in range(args.num_epochs):
-        if args.ip:
-            if args.negatives_only:
-                train = sort_negatives(train, bhat)
-            else:
-                train.sort(key=lambda e: dot(e[0], bhat))
-        else:
-            random.shuffle(train)
         print(f"----- epoch {epoch} -----")
-        for i, (x, y) in enumerate(train):
+        for i in trange(len(train)):
+            x, y = None, None
+            if args.ip:
+                if args.negatives_only:
+                    train = sort_negatives(train, bhat)
+                    (x, y) = random.choice([train[0], train[1]])
+                else:
+                    train.sort(key=lambda e: dot(e[0], bhat))
+                    (x, y) = train[0]
+            else:
+                (x, y) = random.choice(train)
+
             # predict and compute loss
             yhat = sigmoid(dot(bhat, x))
             loss = compute_loss(yhat, y)
@@ -119,7 +124,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--num-epochs', '-e',
         type=int,
-        default=40,
+        default=1,
     )
     parser.add_argument(
         '--num-examples', '-n',
@@ -134,6 +139,11 @@ if __name__ == '__main__':
     parser.add_argument(
         '--label', '-l',
         help='tensorboard run label',
+    )
+    parser.add_argument(
+        '--folder', '-f',
+        help='tensorboard run folder',
+        default='runs'
     )
     args = parser.parse_args()
     main(args)
