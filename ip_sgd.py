@@ -37,12 +37,20 @@ def sort_negatives(train, bhat):
     ]
 
 
+def logloss(true_label, predicted, eps=1e-15):
+    p = np.clip(predicted, eps, 1 - eps)
+    if true_label == 1:
+        return -np.log(p)
+    else:
+        return -np.log(1 - p)
+
+
 def main(args):
     # fix random seed
     torch.manual_seed(args.seed)
 
     # set up tensorboard logging
-    label = 'baseline'
+    label = 'vanilla-sgd'
     if args.ip:
         label = 'inner-product-sgd'
     if args.label:
@@ -71,6 +79,7 @@ def main(args):
     step_size = 0.001
 
     # training loop
+    random.shuffle(train)
     for epoch in range(args.num_epochs):
         print(f"----- epoch {epoch} -----")
         for i in trange(len(train)):
@@ -83,7 +92,7 @@ def main(args):
                     train.sort(key=lambda e: dot(e[0], bhat))
                     (x, y) = train[0]
             else:
-                (x, y) = random.choice(train)
+                (x, y) = train[i]
 
             # predict and compute loss
             yhat = sigmoid(dot(bhat, x))
