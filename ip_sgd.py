@@ -59,9 +59,7 @@ def main(args):
 
     # dataset parameters
     input_dim = 50
-    A = torch.rand(input_dim, input_dim)
-    covariance_matrix = torch.matmul(A.t(), A)
-    m = MultivariateNormal(torch.zeros(input_dim), covariance_matrix)
+    m = MultivariateNormal(torch.zeros(input_dim), torch.eye(input_dim))
     b = torch.rand(input_dim)
 
     # create dataset
@@ -76,7 +74,7 @@ def main(args):
 
     # training initialization
     bhat = torch.rand(input_dim)
-    step_size = 0.001
+    step_size = 0.01
 
     # training loop
     random.shuffle(train)
@@ -85,12 +83,8 @@ def main(args):
         for i in trange(len(train)):
             x, y = None, None
             if args.ip:
-                if args.negatives_only:
-                    train = sort_negatives(train, bhat)
-                    (x, y) = random.choice([train[0], train[1]])
-                else:
-                    train.sort(key=lambda e: dot(e[0], bhat))
-                    (x, y) = train[0]
+                train = sort_negatives(train, bhat)
+                (x, y) = random.choice([train[0], train[1]])
             else:
                 (x, y) = train[i]
 
@@ -104,7 +98,7 @@ def main(args):
             bhat -= step_size * gradient
 
             # compute and log || b_hat - b ||
-            b_error = np.linalg.norm(bhat - b, 2)
+            b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
             writer.add_scalar('b_error', b_error, epoch * len(data) + i)
 
         # compute and report avg loss on validation set
@@ -124,11 +118,6 @@ if __name__ == '__main__':
         '--ip',
         action='store_true',
         help='if set, sort examples by inner product <x_i, b>',
-    )
-    parser.add_argument(
-        '--negatives-only',
-        action='store_true',
-        help='if set, only sort negatives by <x_i, bhat>',
     )
     parser.add_argument(
         '--num-epochs', '-e',
