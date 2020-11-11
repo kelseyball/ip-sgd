@@ -59,6 +59,9 @@ def main(args):
 
     # dataset parameters
     input_dim = 50
+    # A = torch.rand(input_dim, input_dim)
+    # cov = torch.matmul(A.t(), A)
+    # m = MultivariateNormal(torch.zeros(input_dim), cov)
     m = MultivariateNormal(torch.zeros(input_dim), torch.eye(input_dim))
     b = torch.rand(input_dim)
 
@@ -74,7 +77,7 @@ def main(args):
 
     # training initialization
     bhat = torch.rand(input_dim)
-    step_size = 0.01
+    step_size = args.step_size
 
     # training loop
     random.shuffle(train)
@@ -98,8 +101,11 @@ def main(args):
             bhat -= step_size * gradient
 
             # compute and log || b_hat - b ||
+            unnormalized_b_error = np.linalg.norm(bhat - b, 2)
             b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
             writer.add_scalar('b_error', b_error, epoch * len(data) + i)
+            writer.add_scalar('log_b_error', np.log(b_error), epoch * len(data) + i)
+            writer.add_scalar('unnormalized_b_error', unnormalized_b_error, epoch * len(data) + i)
 
         # compute and report avg loss on validation set
         val_loss = 0
@@ -130,7 +136,7 @@ if __name__ == '__main__':
         default=10000
     )
     parser.add_argument(
-        '--seed', '-s',
+        '--seed', '-r',
         type=int,
         default=42
     )
@@ -142,6 +148,11 @@ if __name__ == '__main__':
         '--folder', '-f',
         help='tensorboard run folder',
         default='runs'
+    )
+    parser.add_argument(
+        '--step-size', '-s',
+        type=float,
+        default=0.01,
     )
     args = parser.parse_args()
     main(args)
