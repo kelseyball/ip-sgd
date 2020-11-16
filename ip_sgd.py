@@ -59,15 +59,25 @@ def main(args):
 
     # dataset parameters
     input_dim = 50
-    # A = torch.rand(input_dim, input_dim)
-    # cov = torch.matmul(A.t(), A)
-    # m = MultivariateNormal(torch.zeros(input_dim), cov)
     m = MultivariateNormal(torch.zeros(input_dim), torch.eye(input_dim))
     b = torch.rand(input_dim)
+    # b = b.div(torch.norm(b, p=2))
 
     # create dataset
     inputs = [m.sample() for _ in range(args.num_examples)]
-    data = [(x, Bernoulli(sigmoid(dot(b, x))).sample()) for x in inputs]
+    # data = [(x, Bernoulli(sigmoid(dot(b, x))).sample()) for x in inputs]
+
+    # try making data linearly separable
+    data = [(x, torch.tensor(1.0) if sigmoid(dot(b, x)) > 0.5 else torch.tensor(0)) for x in inputs]
+
+    # throwaway 80% of positives
+    data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)] 
+
+    # report count, ratio of positives and negatives
+    positives = [e for e in data if e[1].item() == 1.0]
+    negatives = [e for e in data if e[1].item() == 0.0]
+    print(f'{len(positives)} positives, {len(negatives)} negatives')
+    print(f'{len(positives)/float(len(data)):.2f}% positives, {len(negatives)/float(len(data)):.2f}% negatives')
 
     # train/val split
     split_index = int(len(data) * 0.8)
@@ -77,11 +87,12 @@ def main(args):
 
     # training initialization
     bhat = torch.rand(input_dim)
+    # bhat = bhat.div(torch.norm(bhat, p=2))
     step_size = args.step_size
 
     # training loop
-    random.shuffle(train)
     for epoch in range(args.num_epochs):
+        random.shuffle(train)
         print(f"----- epoch {epoch} -----")
         for i in trange(len(train)):
             x, y = None, None
@@ -102,10 +113,10 @@ def main(args):
 
             # compute and log || b_hat - b ||
             unnormalized_b_error = np.linalg.norm(bhat - b, 2)
-            b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
-            writer.add_scalar('b_error', b_error, epoch * len(data) + i)
-            writer.add_scalar('log_b_error', np.log(b_error), epoch * len(data) + i)
-            writer.add_scalar('unnormalized_b_error', unnormalized_b_error, epoch * len(data) + i)
+            # b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
+            # writer.add_scalar('b_error', b_error, epoch * len(data) + i)
+            # writer.add_scalar('log_b_error', np.log(b_error), epoch * len(data) + i)
+            # writer.add_scalar('unnormalized_b_error', unnormalized_b_error, epoch * len(data) + i)
 
         # compute and report avg loss on validation set
         val_loss = 0
@@ -114,6 +125,9 @@ def main(args):
             loss = compute_loss(yhat, y)
             val_loss += loss
         val_loss_avg = val_loss / len(val)
+
+        b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
+        writer.add_scalar('b_error', b_error, epoch)
         writer.add_scalar('avg_val_loss', val_loss_avg, epoch)
         print(f'val loss: {val_loss_avg}')
 
@@ -128,12 +142,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--num-epochs', '-e',
         type=int,
-        default=1,
+        default=40,
     )
     parser.add_argument(
         '--num-examples', '-n',
         type=int,
-        default=10000
+        default=1000
     )
     parser.add_argument(
         '--seed', '-r',
@@ -152,7 +166,13 @@ if __name__ == '__main__':
     parser.add_argument(
         '--step-size', '-s',
         type=float,
-        default=0.01,
+        default=0.001,
+    )
+    parser.add_argument(
+        '--positives', '-p',
+        type=float,
+        default=0.2,
+        help='percent positives to keep'
     )
     args = parser.parse_args()
     main(args)
