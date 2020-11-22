@@ -71,7 +71,25 @@ def main(args):
     data = [(x, torch.tensor(1.0) if sigmoid(dot(b, x)) > 0.5 else torch.tensor(0)) for x in inputs]
 
     # throwaway 80% of positives
-    data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)] 
+    # data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)]
+
+    data_rebalanced = []
+    for (x, y) in data:
+        if y.item() == 0.0:
+            data_rebalanced.append((x, y))
+        else:
+            if random.random() < args.positives:
+                data_rebalanced.append((x,y))
+            else:
+                # replace with negative
+                while True:
+                    new_x = m.sample()
+                    new_y = sigmoid(dot(b, new_x))
+                    if new_y < 0.5:
+                        data_rebalanced.append((new_x, torch.tensor(0)))
+                        break
+    data = data_rebalanced
+
 
     # report count, ratio of positives and negatives
     positives = [e for e in data if e[1].item() == 1.0]
