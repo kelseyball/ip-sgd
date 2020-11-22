@@ -9,6 +9,7 @@ from torch.distributions.bernoulli import Bernoulli
 from torch import sigmoid, dot, log
 import random
 
+from sklearn.metrics import f1_score
 
 def compute_loss(yhat, y):
     """
@@ -46,8 +47,9 @@ def logloss(true_label, predicted, eps=1e-15):
 
 
 def main(args):
-    # fix random seed
-    torch.manual_seed(args.seed)
+    if args.seed:
+        # fix random seed
+        torch.manual_seed(args.seed)
 
     # set up tensorboard logging
     label = 'vanilla-sgd'
@@ -61,7 +63,6 @@ def main(args):
     input_dim = 50
     m = MultivariateNormal(torch.zeros(input_dim), torch.eye(input_dim))
     b = torch.rand(input_dim)
-    # b = b.div(torch.norm(b, p=2))
 
     # create dataset
     inputs = [m.sample() for _ in range(args.num_examples)]
@@ -70,42 +71,25 @@ def main(args):
     # try making data linearly separable
     data = [(x, torch.tensor(1.0) if sigmoid(dot(b, x)) > 0.5 else torch.tensor(0)) for x in inputs]
 
-    # throwaway 80% of positives
-    # data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)]
-
-    data_rebalanced = []
-    for (x, y) in data:
-        if y.item() == 0.0:
-            data_rebalanced.append((x, y))
-        else:
-            if random.random() < args.positives:
-                data_rebalanced.append((x,y))
-            else:
-                # replace with negative
-                while True:
-                    new_x = m.sample()
-                    new_y = sigmoid(dot(b, new_x))
-                    if new_y < 0.5:
-                        data_rebalanced.append((new_x, torch.tensor(0)))
-                        break
-    data = data_rebalanced
-
+    if args.positives:
+        # throwaway 80% of positives
+        data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)]
 
     # report count, ratio of positives and negatives
-    positives = [e for e in data if e[1].item() == 1.0]
-    negatives = [e for e in data if e[1].item() == 0.0]
-    print(f'{len(positives)} positives, {len(negatives)} negatives')
-    print(f'{len(positives)/float(len(data)):.2f}% positives, {len(negatives)/float(len(data)):.2f}% negatives')
+    num_positives = sum([1 for e in data if e[1].item() == 1.0])
+    num_negatives = sum([1 for e in data if e[1].item() == 0.0])
+    print(f'{num_positives} positives, {num_negatives} negatives')
+    print(f'{num_positives/float(len(data)):.2f}% positives, {num_negatives/float(len(data)):.2f}% negatives')
 
     # train/val split
     split_index = int(len(data) * 0.8)
     train = data[:split_index]
     val = data[split_index:]
     print(f'{len(train)} train examples, {len(val)} val examples')
+    _, y_true_val = tuple(zip(*val))
 
     # training initialization
     bhat = torch.rand(input_dim)
-    # bhat = bhat.div(torch.norm(bhat, p=2))
     step_size = args.step_size
 
     # training loop
@@ -129,25 +113,23 @@ def main(args):
             gradient = x * (yhat - y)
             bhat -= step_size * gradient
 
-            # compute and log || b_hat - b ||
-            unnormalized_b_error = np.linalg.norm(bhat - b, 2)
-            # b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
-            # writer.add_scalar('b_error', b_error, epoch * len(data) + i)
-            # writer.add_scalar('log_b_error', np.log(b_error), epoch * len(data) + i)
-            # writer.add_scalar('unnormalized_b_error', unnormalized_b_error, epoch * len(data) + i)
-
         # compute and report avg loss on validation set
         val_loss = 0
+        y_pred_val = []
         for i, (x, y) in enumerate(val):
             yhat = sigmoid(dot(bhat, x))
+            y_pred_val.append(1 if yhat > 0.5 else 0)
             loss = compute_loss(yhat, y)
             val_loss += loss
-        val_loss_avg = val_loss / len(val)
 
+        val_loss_avg = val_loss / len(val)
+        f1 = f1_score(y_true_val, y_pred_val)
         b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
-        writer.add_scalar('b_error', b_error, epoch)
         writer.add_scalar('avg_val_loss', val_loss_avg, epoch)
+        writer.add_scalar('f1', f1, epoch)
+        writer.add_scalar('b_error', b_error, epoch)
         print(f'val loss: {val_loss_avg}')
+        print(f'f1 score: {f1}')
 
 
 if __name__ == '__main__':
@@ -170,7 +152,6 @@ if __name__ == '__main__':
     parser.add_argument(
         '--seed', '-r',
         type=int,
-        default=42
     )
     parser.add_argument(
         '--label', '-l',
