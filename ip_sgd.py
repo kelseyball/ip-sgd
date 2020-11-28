@@ -11,14 +11,6 @@ import random
 
 from sklearn.metrics import f1_score
 
-def compute_loss(yhat, y):
-    """
-    compute logistic loss
-    """
-    if (yhat == 0 and y == 0) or (yhat == 1 and y == 1):
-        return 0
-    return -1 * (y * log(yhat) + (1 - y) * log(1 - yhat))
-
 
 def sort_negatives(train, bhat):
     """
@@ -38,7 +30,7 @@ def sort_negatives(train, bhat):
     ]
 
 
-def logloss(true_label, predicted, eps=1e-15):
+def logloss(predicted, true_label, eps=1e-15):
     p = np.clip(predicted, eps, 1 - eps)
     if true_label == 1:
         return -np.log(p)
@@ -106,7 +98,7 @@ def main(args):
 
             # predict and compute loss
             yhat = sigmoid(dot(bhat, x))
-            loss = compute_loss(yhat, y)
+            loss = logloss(yhat, y)
             writer.add_scalar('train_loss', loss, epoch * len(data) + i)
 
             # compute gradient and update b_hat
@@ -119,7 +111,7 @@ def main(args):
         for i, (x, y) in enumerate(val):
             yhat = sigmoid(dot(bhat, x))
             y_pred_val.append(1 if yhat > 0.5 else 0)
-            loss = compute_loss(yhat, y)
+            loss = logloss(yhat, y)
             val_loss += loss
 
         val_loss_avg = val_loss / len(val)
