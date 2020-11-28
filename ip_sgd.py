@@ -47,7 +47,7 @@ def main(args):
     algo = 'ip-sgd' if args.ip else 'vanilla-sgd'
     label = f'{algo}_n{args.num_examples}_ss{args.step_size}_p{args.positives}'
     if args.label:
-        label += args.label
+        label += f'_{args.label}'
     writer = SummaryWriter(f'{args.folder}/{label}')
     writer.add_text('args', str(args))
 
