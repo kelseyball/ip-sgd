@@ -52,12 +52,12 @@ def main(args):
         torch.manual_seed(args.seed)
 
     # set up tensorboard logging
-    label = 'vanilla-sgd'
-    if args.ip:
-        label = 'inner-product-sgd'
+    algo = 'ip-sgd' if args.ip else 'vanilla-sgd'
+    label = f'{algo}_n{args.num_examples}_ss{args.step_size}_p{args.positives}'
     if args.label:
-        label = args.label
+        label += args.label
     writer = SummaryWriter(f'{args.folder}/{label}')
+    writer.add_text('args', str(args))
 
     # dataset parameters
     input_dim = 50
@@ -71,7 +71,7 @@ def main(args):
     # try making data linearly separable
     data = [(x, torch.tensor(1.0) if sigmoid(dot(b, x)) > 0.5 else torch.tensor(0)) for x in inputs]
 
-    if args.positives:
+    if args.positives < 1.0:
         # throwaway positives to skew ratio
         data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)]
 
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--positives', '-p',
         type=float,
-        default=0.2,
+        default=1.0,
         help='percent positives to keep'
     )
     args = parser.parse_args()
