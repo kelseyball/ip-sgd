@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from tqdm import trange
 import torch
 from torch.utils.tensorboard import SummaryWriter
+import matplotlib.pyplot as plt
 
 import numpy as np
 from torch.distributions.multivariate_normal import MultivariateNormal
@@ -10,6 +11,25 @@ from torch import sigmoid, dot, log
 import random
 
 from sklearn.metrics import f1_score
+
+def plot_decision_boundary(bhat, b):
+    """
+    Plot true and estimated decision boundary
+    """
+    x = np.linspace(-5,5,100)
+    y = -1 * (bhat[0] / bhat[1]) * x
+    plt.plot(x, y, 'c')
+    y = -1 * (b[0] / b[1]) * x
+    plt.plot(x, y, 'm')
+    plt.show()
+
+def plot_point(example):
+    """
+    plot x in blue if positive label, else red
+    """
+    ((x1, x2), y) = example
+    plt.plot(x1, x2, 'bo' if y.item() == 1.0 else 'ro')
+
 
 def compute_loss(yhat, y):
     """
@@ -60,18 +80,18 @@ def main(args):
     writer = SummaryWriter(f'{args.folder}/{label}')
 
     # dataset parameters
-    input_dim = 50
-    m = MultivariateNormal(torch.zeros(input_dim), torch.eye(input_dim))
+    input_dim = 2 
+    m = MultivariateNormal(torch.zeros(input_dim), args.covariance * torch.eye(input_dim))
     b = torch.rand(input_dim)
 
     # create dataset
     inputs = [m.sample() for _ in range(args.num_examples)]
-    # data = [(x, Bernoulli(sigmoid(dot(b, x))).sample()) for x in inputs]
+    data = [(x, Bernoulli(sigmoid(dot(b, x))).sample()) for x in inputs]
 
     # try making data linearly separable
-    data = [(x, torch.tensor(1.0) if sigmoid(dot(b, x)) > 0.5 else torch.tensor(0)) for x in inputs]
+    # data = [(x, torch.tensor(1.0) if sigmoid(dot(b, x)) > 0.5 else torch.tensor(0)) for x in inputs]
 
-    if args.positives:
+    if args.positives < 1:
         # throwaway positives to skew ratio
         data = [(x, y) for (x, y) in data if (y.item() == 0.0) or (y.item() == 1.0 and random.random() < args.positives)]
 
@@ -92,6 +112,11 @@ def main(args):
     bhat = torch.rand(input_dim)
     step_size = args.step_size
 
+    # plot data and initial decision boundary
+    for e in data:
+        plot_point(e)
+    plot_decision_boundary(bhat, b)
+
     # training loop
     for epoch in range(args.num_epochs):
         random.shuffle(train)
@@ -108,10 +133,13 @@ def main(args):
             yhat = sigmoid(dot(bhat, x))
             loss = compute_loss(yhat, y)
             writer.add_scalar('train_loss', loss, epoch * len(data) + i)
+            plot_point((x, y))
 
             # compute gradient and update b_hat
             gradient = x * (yhat - y)
             bhat -= step_size * gradient
+
+        plot_decision_boundary(bhat, b)
 
         # compute and report avg loss on validation set
         val_loss = 0
@@ -121,6 +149,7 @@ def main(args):
             y_pred_val.append(1 if yhat > 0.5 else 0)
             loss = compute_loss(yhat, y)
             val_loss += loss
+            plot_point((x, y))
 
         val_loss_avg = val_loss / len(val)
         f1 = f1_score(y_true_val, y_pred_val)
@@ -130,6 +159,8 @@ def main(args):
         writer.add_scalar('b_error', b_error, epoch)
         print(f'val loss: {val_loss_avg}')
         print(f'f1 score: {f1}')
+        print(f'b error: {b_error}')
+        plot_decision_boundary(bhat, b)
 
 
 if __name__ == '__main__':
@@ -142,12 +173,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--num-epochs', '-e',
         type=int,
-        default=40,
+        default=5,
     )
     parser.add_argument(
         '--num-examples', '-n',
         type=int,
-        default=1000
+        default=100
     )
     parser.add_argument(
         '--seed', '-r',
@@ -165,13 +196,19 @@ if __name__ == '__main__':
     parser.add_argument(
         '--step-size', '-s',
         type=float,
-        default=0.001,
+        default=0.01,
     )
     parser.add_argument(
         '--positives', '-p',
         type=float,
-        default=0.2,
+        default=1.0,
         help='percent positives to keep'
+    )
+    parser.add_argument(
+        '--covariance', '-c',
+        type=float,
+        default=1.0,
+        help='factor to scale identity covariance matrix by'
     )
     args = parser.parse_args()
     main(args)
