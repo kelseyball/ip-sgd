@@ -68,6 +68,15 @@ def describe_data(data: List[Tuple[torch.tensor, torch.tensor]], writer: Summary
     writer.add_text('num_negatives', str(num_negatives))
 
 
+def compute_b_error(b: torch.tensor, bhat: torch.tensor) -> float:
+    """
+    compute l2 norm of bhat (unit-normalized) - b (unit-normalized)
+    """
+    b_normalized = b.div(torch.norm(b, p=2))
+    bhat_normalized = bhat.div(torch.norm(bhat, p=2))
+    return torch.norm(b_normalized - bhat_normalized, p=2).item()
+
+
 def main(args):
     if args.seed:
         # fix random seed
@@ -135,7 +144,7 @@ def main(args):
 
         val_loss_avg = val_loss / len(val)
         f1 = f1_score(y_true_val, y_pred_val)
-        b_error = np.linalg.norm(bhat - b, 2) / np.linalg.norm(b, 2)
+        b_error = compute_b_error(b=b, bhat=bhat)
         writer.add_scalar('avg_val_loss', val_loss_avg, epoch)
         writer.add_scalar('f1', f1, epoch)
         writer.add_scalar('b_error', b_error, epoch)

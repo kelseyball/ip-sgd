@@ -1,12 +1,12 @@
 import pytest
 from pytest import approx
-from ip_sgd import logloss, normalize, max_ip_negative
+from ip_sgd import logloss, normalize, max_ip_negative, compute_b_error
 import torch
 
 input_dim = 2
 
 @pytest.fixture
-def bhat():
+def b():
     return torch.ones(input_dim)
 
 @pytest.fixture
@@ -43,6 +43,14 @@ def test_normalize_l1():
     assert torch.norm(b, p=1).item() != 1.
     assert torch.norm(normalize(b, p=1), p=1).item() == approx(1, abs=1e-5)
 
-def test_max_ip_negative(train, bhat):
-    max_negative_example = max_ip_negative(train=train, bhat=bhat)
+def test_max_ip_negative(train, b):
+    max_negative_example = max_ip_negative(train=train, bhat=b)
     assert torch.all(torch.eq(max_negative_example[0], torch.full((input_dim,), fill_value=2.0)))
+
+def test_compute_b_error(b):
+    bhat = b
+    assert compute_b_error(b, bhat) == 0.
+    bhat = torch.tensor([-1.0, -1.0])
+    assert compute_b_error(b, bhat) == approx(2.0, abs=1e-5)
+    bhat = torch.tensor([-2.0, -2.0])
+    assert compute_b_error(b, bhat) == approx(2.0, abs=1e-5)
